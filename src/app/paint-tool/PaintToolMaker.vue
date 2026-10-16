@@ -119,7 +119,7 @@ function wrapPaint(): SevenTV.Cosmetic<"PAINT"> {
 function tryOn(): void {
 	if (!identity.value) return;
 
-	const m = useCosmetics(identity.value.id).paints;
+	const m = useCosmetics(identity.value.id, true).paints;
 	m.clear();
 	m.set(id.value, wrapPaint());
 }
@@ -127,7 +127,7 @@ function tryOn(): void {
 function onDelete(): void {
 	if (!identity.value) return;
 
-	const m = useCosmetics(identity.value.id).paints;
+	const m = useCosmetics(identity.value.id, true).paints;
 	m.delete(id.value);
 	db.cosmetics.delete(id.value).then(() => emit("exit"));
 }

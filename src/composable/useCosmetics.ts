@@ -1,4 +1,4 @@
-import { ComputedRef, computed, reactive, ref, toRef, watch } from "vue";
+import { reactive, ref, watch } from "vue";
 import { until, useTimeout } from "@vueuse/core";
 import { DecimalToStringRGBA } from "@/common/Color";
 import { log } from "@/common/Logger";
@@ -20,7 +20,6 @@ const data = reactive({
 	userBadges: {} as Record<string, CosmeticMap<"BADGE">>,
 	userPaints: {} as Record<string, CosmeticMap<"PAINT">>,
 	userEmoteSets: {} as Record<string, Map<string, SevenTV.EmoteSet>>,
-	userEmoteMap: {} as Record<string, ComputedRef<Record<string, SevenTV.ActiveEmote>>>,
 
 	staticallyAssigned: {} as Record<string, Record<string, never> | undefined>,
 });
@@ -57,6 +56,12 @@ class CosmeticMap<T extends SevenTV.CosmeticKind> extends Map<string, SevenTV.Co
 		super.clear();
 	}
 }
+
+// Shared empty values for users without cosmetics,
+// so that not every chatter seen needs entries of their own
+const noBadges = new CosmeticMap<"BADGE">();
+const noPaints = new CosmeticMap<"PAINT">();
+const noEmoteSets = new Map<string, SevenTV.EmoteSet>();
 
 let flushTimeout: number | null = null;
 const firstFlush = ref(false);
@@ -334,27 +339,41 @@ db.ready().then(async () => {
 		.then(flush);
 });
 
-export function useCosmetics(userID: string) {
-	if (!data.userBadges[userID]) data.userBadges[userID] = new CosmeticMap();
-	if (!data.userPaints[userID]) data.userPaints[userID] = new CosmeticMap();
-	if (!data.userEmoteSets[userID]) data.userEmoteSets[userID] = new Map();
-	if (!data.userEmoteMap[userID])
-		data.userEmoteMap[userID] = computed(() => {
+/**
+ * Get a user's cosmetics
+ *
+ * Entries are created when the user gets an entitlement, until then the shared empty values are returned
+ *
+ * @param userID the user's ID
+ * @param ensure create the user's entries right away, for callers that modify them
+ */
+export function useCosmetics(userID: string, ensure = false) {
+	if (ensure) {
+		if (!data.userBadges[userID]) data.userBadges[userID] = new CosmeticMap();
+		if (!data.userPaints[userID]) data.userPaints[userID] = new CosmeticMap();
+		if (!data.userEmoteSets[userID]) data.userEmoteSets[userID] = new Map();
+	}
+
+	return reactive({
+		get paints() {
+			return data.userPaints[userID] ?? noPaints;
+		},
+		get badges() {
+			return data.userBadges[userID] ?? noBadges;
+		},
+		get emotes() {
 			const un = {} as Record<string, SevenTV.ActiveEmote>;
-			for (const set of data.userEmoteSets[userID].values()) {
+			for (const set of data.userEmoteSets[userID]?.values() ?? []) {
 				for (const emote of set.emotes) {
 					if (!emote.data?.state?.includes("PERSONAL")) continue;
 					un[emote.name] = emote;
 				}
 			}
 			return un;
-		});
-
-	return reactive({
-		paints: toRef(data.userPaints, userID),
-		badges: toRef(data.userBadges, userID),
-		emotes: toRef(data.userEmoteMap, userID),
-		emoteSets: toRef(data.userEmoteSets, userID),
+		},
+		get emoteSets() {
+			return data.userEmoteSets[userID] ?? noEmoteSets;
+		},
 	});
 }
 
