@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, reactive, ref, watch } from "vue";
+import { onUnmounted, reactive, ref, toRaw, watch } from "vue";
 import { REACT_TYPEOF_TOKEN } from "@/common/Constant";
 import { log } from "@/common/Logger";
 import { HookedInstance, REACT_ELEMENT_SYMBOL } from "@/common/ReactHooks";
@@ -51,6 +51,12 @@ interface TrackedMessageRef {
 	timestamp: string;
 }
 
+interface PatchedComment {
+	comment: Twitch.VideoChatComment;
+	element: ReturnType<typeof createMessageComponentRef>["element"];
+	ref: TrackedMessageRef;
+}
+
 const props = defineProps<{
 	list: HookedInstance<ReactExtended.WritableComponent>;
 	controller: HookedInstance<Twitch.VideoChatComponent>;
@@ -63,6 +69,10 @@ const emotes = useChatEmotes(ctx);
 const properties = useChatProperties(ctx);
 
 const messageRefs = ref<TrackedMessageRef[]>([]);
+
+// Patched comments currently in the list, by comment ID.
+// The list re-renders on every new comment, so these are reused rather than rebuilt each time
+let patchedComments = new Map<string, PatchedComment>();
 
 // Capture current channel
 definePropertyHook(props.controller.component, "props", {
@@ -172,8 +182,9 @@ function isCommentData(data: any): data is CommentData {
 
 function patchComments(comments: ReactExtended.ReactRuntimeElement[]): ReactExtended.ReactRuntimeElement[] {
 	const newList = [] as ReactExtended.ReactRuntimeElement[];
+	const newRefs = [] as TrackedMessageRef[];
+	const patched = new Map<string, PatchedComment>();
 
-	messageRefs.value.length = 0;
 	for (let i = 0; i < comments.length; i++) {
 		const c = comments[i];
 		if (!c) continue;
@@ -187,15 +198,37 @@ function patchComments(comments: ReactExtended.ReactRuntimeElement[]): ReactExte
 		const data = children.props?.children?.props;
 		if (!isCommentData(data)) continue;
 
-		const msgRef = createMessageComponentRef(data);
-		c.props.children = msgRef.element;
+		const comment = data.messageContext.comment;
+
+		// reuse the message from the previous render, unless the comment has changed
+		let p = patchedComments.get(comment.id);
+		if (!p || p.comment !== comment) {
+			const msgRef = createMessageComponentRef(data);
+
+			p = {
+				comment,
+				element: msgRef.element,
+				ref: {
+					current: reactive(msgRef.element.ref),
+					msg: msgRef.msg,
+					timestamp: msgRef.timestamp,
+				},
+			};
+		}
+		patched.set(comment.id, p);
+
+		c.props.children = p.element;
 
 		newList[i] = c;
-		messageRefs.value[i] = {
-			current: reactive(msgRef.element.ref),
-			msg: msgRef.msg,
-			timestamp: msgRef.timestamp,
-		};
+		newRefs.push(p.ref);
+	}
+
+	patchedComments = patched;
+
+	// only update when the list changed, so unchanged re-renders don't re-render our messages
+	const oldRefs = messageRefs.value;
+	if (newRefs.length !== oldRefs.length || newRefs.some((r, i) => r !== toRaw(oldRefs[i]))) {
+		messageRefs.value = newRefs;
 	}
 
 	return newList;
@@ -311,6 +344,7 @@ function createMessageComponentRef(data: CommentData) {
 onUnmounted(() => {
 	unsetPropertyHook(props.controller.component, "props");
 	unsetPropertyHook(props.list.component, "render");
+	patchedComments.clear();
 
 	log.debug("<Chat/Vod> Unmounted");
 });
