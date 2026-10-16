@@ -145,11 +145,16 @@ defineFunctionHook(props.list.component, "render", function (this, f) {
 });
 
 // Trigger update when message list updates on our end
-watch(messageRefs.value, () => {
-	if (!props.list.component || typeof props.list.component.componentDidUpdate !== "function") return;
+// Only the list and the message mount points are watched, a deep watch would track every field of every message
+watch(
+	() => messageRefs.value.map((r) => r.current.current),
+	() => {
+		if (!props.list.component || typeof props.list.component.componentDidUpdate !== "function") return;
 
-	props.list.component.componentDidUpdate(props.list.component.props, props.list.component.state);
-});
+		props.list.component.componentDidUpdate(props.list.component.props, props.list.component.state);
+	},
+	{ flush: "post" },
+);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isCommentData(data: any): data is CommentData {
