@@ -9,7 +9,7 @@
 		<div class="seventv-set-header">
 			<div class="seventv-set-header-icon">
 				<img v-if="es.owner && es.owner.avatar_url" :src="es.owner.avatar_url" />
-				<Logo v-else class="logo" :provider="es.provider" />
+				<Logo v-else class="logo" :provider="es.provider!" />
 			</div>
 
 			<span class="seventv-set-name">{{ getLocaleName() }}</span>

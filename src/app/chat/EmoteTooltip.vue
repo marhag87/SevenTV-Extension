@@ -23,7 +23,7 @@
 
 			<div class="details">
 				<h3 class="emote-name">{{ emote.name }}</h3>
-				<Logo class="logo" :provider="emote.provider" />
+				<Logo class="logo" :provider="emote.provider!" />
 			</div>
 
 			<!-- Alias Labels -->

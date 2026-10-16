@@ -67,7 +67,7 @@
 								<SingleEmoji :id="emojiGroupIcons[emojiCategories.indexOf(es.name)]" :alt="es.name" />
 							</div>
 							<img v-else-if="es.owner && es.owner.avatar_url" :src="es.owner.avatar_url" />
-							<Logo v-else class="logo" :provider="es.provider" />
+							<Logo v-else class="logo" :provider="es.provider!" />
 						</div>
 					</div>
 				</template>
